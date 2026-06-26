@@ -101,7 +101,6 @@ function createBot() {
 
                     const pos = bobberEntity.position;
 
-                    // 1. Kiểm tra va chạm trực tiếp với thực thể/item
                     const hitEntity = Object.values(bot.entities).find(e => {
                         if (e.id === bot.entity.id || e.id === bobberEntity.id) return false;
 
@@ -125,7 +124,6 @@ function createBot() {
                         return e.position.distanceTo(pos) < 1.0;
                     });
 
-                    // 2. Kiểm tra xem phao có ở trong nước không
                     const blockCurrent = bot.blockAt(pos);
                     const blockBelow = bot.blockAt(pos.offset(0, -1, 0));
 
@@ -219,16 +217,13 @@ function createBot() {
             }
         }
 
-        // =========================================================================
-        // [CẬP NHẬT 1]: NẾU BỊ ĐÁ RA SẢNH THÌ RESET BỘ NHỚ KẸT PHAO + THU CẦN AN TOÀN
-        // =========================================================================
         if (lowerMsg.includes('kicked from') || lowerMsg.includes('bảo trì') || lowerMsg.includes('đã đóng')) {
             console.log('[Hệ Thống] Phát hiện bị ném ra Sảnh! Dọn dẹp tàn dư và lôi la bàn ra đục lỗ...');
             botState = 'IN_HUB'; 
             bot.isFishingActive = false; 
-            bot.isRecasting = false; // Xóa trạng thái kẹt phao
+            bot.isRecasting = false;
             if (rotateInterval) { clearInterval(rotateInterval); rotateInterval = null; }
-            try { bot.activateItem(); } catch (e) {} // Ép thu cần nếu bị kẹt
+            try { bot.activateItem(); } catch (e) {}
         }
 
         const isKilledByPlayer = message.includes(bot.username) && 
@@ -242,18 +237,14 @@ function createBot() {
             if (rotateInterval) { clearInterval(rotateInterval); rotateInterval = null; }
         }
 
-        // =========================================================================
-        // [CẬP NHẬT 2]: BỘ THANH TẨY KHI VỪA VÀO LẠI MÁY CHỦ (SAU BẢO TRÌ/RESET)
-        // =========================================================================
         if (lowerMsg.includes('vừa tham gia máy chủ') && lowerMsg.includes(bot.username.toLowerCase())) {
             if (botState !== 'FARMING') {
                 console.log(`[Mắt Thần] ĐÃ LỌT VÀO CỤM CHƠI! Thanh tẩy trạng thái, Xách cần đi câu!`);
                 botState = 'FARMING';
                 
-                // --- BỘ THANH TẨY TRẠNG THÁI ---
-                bot.isFishingActive = false;     // Reset luồng câu
-                bot.isRecasting = false;         // Xóa sạch trí nhớ kẹt phao
-                bot.clearControlStates();        // Thả hết nút WASD đang kẹt
+                bot.isFishingActive = false;     
+                bot.isRecasting = false;         
+                bot.clearControlStates();        
                 if (rotateInterval) { clearInterval(rotateInterval); rotateInterval = null; }
                 
                 startFishingProcess(bot);
@@ -349,14 +340,23 @@ function createBot() {
             return; 
         }
 
+        // =========================================================
+        // [ĐẶC QUYỀN]: THẤY CỜ "DỖI SERVER" LÀ VÔ LẠI NGAY LẬP TỨC
+        // =========================================================
+        if (bot.isDoiServer) {
+            console.log('[Dỗi Server] Nghỉ chơi 3 giây rồi log vô lại liền!');
+            setTimeout(createBot, 3000); // 3 giây bay vô liền, không bị tính failCount
+            return;
+        }
+
         failCount++;
         if (failCount >= 5) {
-            console.log(`[BÁO ĐỘNG] Rớt mạng ${failCount} lần! Ngủ đông 1 tiếng...`);
+            console.log(`[BÁO ĐỘNG] Rớt mạng ${failCount} lần! Ngủ đông 40 giây...`);
             failCount = 0; 
             setTimeout(createBot, 40000); 
             return;
         }
-        console.log(`[Mất mạng] Lần rớt thứ ${failCount}. Đợi vào lại...`);
+        console.log(`[Mất mạng] Lần rớt thứ ${failCount}. Đợi ${RECONNECT_DELAY/1000}s vào lại...`);
         setTimeout(createBot, RECONNECT_DELAY);
     });
 }
@@ -412,12 +412,10 @@ async function startFishingProcess(bot) {
                     console.log('[Câu Cá] Thu cần xong. Chuẩn bị quăng lại ngay lập tức...');
                     await sleep(500); 
                 } else {
-                    // =========================================================
-                    // [TÍNH NĂNG MỚI] DỖI SERVER: HỤT 1 PHÁT LÀ RÚT DÂY MẠNG LIỀN
-                    // =========================================================
                     console.log('>>> [CẢNH BÁO] ❌ Hụt cá rồi! Sủi ngay để reset nhân phẩm...');
-                    bot.quit('Missed Fish'); // Lệnh này đá văng bot khỏi server ngay lập tức
-                    break; // Phá vỡ vòng lặp câu cá hiện tại
+                    bot.isDoiServer = true; // Cắm cờ "Dỗi" lên
+                    bot.quit();             // Rút phích cắm
+                    break; 
                 }
             }
         }
